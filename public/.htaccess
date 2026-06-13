@@ -1,0 +1,13 @@
+# Sécurité – empêche l'accès aux fichiers sensibles
+<FilesMatch "\.(db|env|json|log|py|txt|md)$">
+    Order Allow,Deny
+    Deny from all
+</FilesMatch>
+
+# Compression et cache
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css application/javascript
+</IfModule>
+
+# Page d'accueil
+DirectoryIndex index.php

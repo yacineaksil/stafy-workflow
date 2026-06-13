@@ -7,7 +7,8 @@ from contextlib import contextmanager
 
 from src.models.email import Email, EmailAnalysis, DailyBriefing, EmailCategory, Priority
 
-DB_PATH = Path("stafy.db")
+import os
+DB_PATH = Path(os.getenv("STAFY_DB_PATH", "stafy.db"))
 
 
 def init_db():
