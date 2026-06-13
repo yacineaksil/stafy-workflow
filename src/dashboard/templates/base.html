@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="fr" class="h-full">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}Stafy – Assistante Exécutive{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        stafy: { 50: '#f0f7ff', 100: '#e0effe', 600: '#1d6fc4', 700: '#1558a0', 900: '#0d3a6e' }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+        body { font-family: 'Inter', system-ui, sans-serif; }
+        .badge-urgent { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+        .badge-important { background: #fff7ed; color: #c2410c; border: 1px solid #fed7aa; }
+        .badge-normal { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+        .badge-newsletter { background: #f5f3ff; color: #6d28d9; border: 1px solid #ddd6fe; }
+        .badge-spam { background: #f9fafb; color: #6b7280; border: 1px solid #e5e7eb; }
+        .priority-5 { border-left: 4px solid #dc2626; }
+        .priority-4 { border-left: 4px solid #ea580c; }
+        .priority-3 { border-left: 4px solid #2563eb; }
+        .priority-2 { border-left: 4px solid #16a34a; }
+        .priority-1 { border-left: 4px solid #9ca3af; }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-full">
+    <!-- Navbar -->
+    <nav class="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16 items-center">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 bg-stafy-700 rounded-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                        </svg>
+                    </div>
+                    <div>
+                        <span class="font-bold text-gray-900 text-lg tracking-tight">Stafy</span>
+                        <span class="text-gray-400 text-sm ml-1">Assistante Exécutive</span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <a href="/" class="text-sm text-gray-600 hover:text-gray-900 font-medium px-3 py-1.5 rounded-md hover:bg-gray-100 transition">
+                        Dashboard
+                    </a>
+                    <button onclick="triggerRefresh()"
+                        id="refresh-btn"
+                        class="inline-flex items-center gap-2 bg-stafy-700 text-white text-sm font-medium px-4 py-2 rounded-lg hover:bg-stafy-900 transition-colors">
+                        <svg id="refresh-icon" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                        Actualiser
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <script>
+        async function triggerRefresh() {
+            const btn = document.getElementById('refresh-btn');
+            const icon = document.getElementById('refresh-icon');
+            btn.disabled = true;
+            btn.classList.add('opacity-60');
+            icon.classList.add('animate-spin');
+
+            const resp = await fetch('/refresh', { method: 'POST' });
+            const data = await resp.json();
+
+            if (data.status === 'already_running') {
+                alert('Une analyse est déjà en cours...');
+                btn.disabled = false;
+                btn.classList.remove('opacity-60');
+                icon.classList.remove('animate-spin');
+                return;
+            }
+
+            setTimeout(() => window.location.reload(), 3000);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+.env
+*.db
+token.json
+credentials.json
+logs/
+legacy/
+public/
+__pycache__/
+**/__pycache__/
+*.pyc
+.git/
