@@ -1,155 +1,215 @@
 # Stafy – Assistante Exécutive Email
 
-Agent IA de gestion d'emails avec dashboard exécutif, propulsé par Claude.
+Agent IA de gestion d'emails pour dirigeants. Analyse, priorise, rédige des réponses et produit un briefing exécutif quotidien.
 
-## Fonctionnalités
-
-- **Lecture intelligente** – Connexion Gmail OAuth2, récupération automatique
-- **Analyse IA** – Catégorisation, priorité 1→5, sentiment, points clés
-- **Réponses suggérées** – Brouillons professionnels générés par Claude
-- **Briefing exécutif** – Résumé quotidien + actions prioritaires + alertes
-- **Dashboard PHP** – Hébergeable sur Hostinger shared hosting
+**Stack 2026 · Gratuit · Self-hosted · IMAP universel**
 
 ---
 
-## Déploiement Hostinger (hébergement partagé)
-
-### Architecture
+## Architecture
 
 ```
-/home/USERNAME/
-├── stafy-workflow/          ← code Python + base de données (hors web)
-│   ├── .env                 ← clés API (jamais accessible depuis le web)
-│   ├── token.json           ← token Gmail OAuth
-│   ├── stafy.db             ← base de données SQLite
-│   ├── cron_refresh.py      ← script appelé par le cron Hostinger
-│   └── src/
-└── public_html/
-    └── stafy/               ← dashboard PHP (accessible depuis le web)
-        ├── index.php
-        ├── email.php
-        ├── refresh.php
-        └── ...
+┌─────────────────────────────────────────────────────────┐
+│                        Votre VM                         │
+│                                                         │
+│  ┌─────────┐   ┌──────────────┐   ┌─────────────────┐  │
+│  │  Nginx  │──▶│  FastAPI     │──▶│  SQLite         │  │
+│  │  :443   │   │  + Scheduler │   │  stafy.db       │  │
+│  └─────────┘   └──────┬───────┘   └─────────────────┘  │
+│                        │                                │
+│           ┌────────────┴────────────┐                   │
+│           ▼                         ▼                   │
+│  ┌──────────────┐         ┌──────────────────┐          │
+│  │  IMAP        │         │  Ollama (gratuit)│          │
+│  │  Votre mail  │         │  qwen2.5:7b      │          │
+│  └──────────────┘         └──────────────────┘          │
+└─────────────────────────────────────────────────────────┘
 ```
 
-### Étape 1 – Cloner le dépôt sur Hostinger (SSH)
+**Flux :** Toutes les 30 min → lecture IMAP → Claude/Ollama analyse → briefing → dashboard
+
+---
+
+## Prérequis
+
+| Composant | Minimum | Recommandé |
+|-----------|---------|-----------|
+| RAM VM | 8 Go | 16 Go |
+| CPU | 2 cœurs | 4 cœurs |
+| Stockage | 10 Go | 20 Go |
+| OS | Ubuntu 22.04+ | Ubuntu 24.04 |
+| Python | 3.11+ | 3.12 |
+| Docker | 24+ | latest |
+| Accès email | IMAP/SSL | IMAP/SSL |
+
+---
+
+## Déploiement VM – Mode Docker (recommandé)
+
+### 1. Cloner et configurer
 
 ```bash
-ssh USERNAME@VOTRE_SERVEUR_HOSTINGER
-cd ~
 git clone https://github.com/yacineaksil/stafy-workflow.git
 cd stafy-workflow
-```
-
-### Étape 2 – Installer Python et les dépendances
-
-```bash
-pip3 install --user -r requirements.txt
-```
-
-### Étape 3 – Configurer les variables d'environnement
-
-```bash
 cp .env.example .env
-nano .env   # Renseignez ANTHROPIC_API_KEY
+nano .env   # Remplir IMAP_* et DASHBOARD_PASSWORD
 ```
 
-### Étape 4 – Configurer Gmail OAuth (sur votre machine locale)
+### 2. Générer le SSL (Let's Encrypt)
 
 ```bash
-# Sur VOTRE machine (pas le serveur)
-pip install -r requirements.txt
-python setup_oauth.py    # Ouvre un navigateur pour l'autorisation Google
+# Installer certbot si nécessaire
+apt install certbot
+make ssl-cert DOMAIN=stafy.votredomaine.com
+
+# Puis éditer nginx/stafy.conf pour mettre votre domaine
 ```
 
-Puis uploadez `token.json` et `credentials.json` sur le serveur :
+### 3. Démarrer
 
 ```bash
-scp token.json credentials.json USERNAME@VOTRE_SERVEUR:/home/USERNAME/stafy-workflow/
+make up
+make model-in-docker   # Télécharge qwen2.5:7b dans Ollama (~4 Go)
 ```
 
-### Étape 5 – Copier le dashboard PHP dans public_html
-
-```bash
-# Sur le serveur SSH
-mkdir -p ~/public_html/stafy
-cp -r ~/stafy-workflow/public/* ~/public_html/stafy/
-```
-
-Éditez `~/public_html/stafy/config.php` et remplacez `YOUR_USERNAME` :
-
-```php
-define('DB_PATH',      '/home/YOUR_USERNAME/stafy-workflow/stafy.db');
-define('REFRESH_FLAG', '/home/YOUR_USERNAME/stafy-workflow/refresh.flag');
-define('LOGS_DIR',     '/home/YOUR_USERNAME/stafy-workflow/logs');
-```
-
-### Étape 6 – Configurer le cron job (cPanel Hostinger)
-
-Dans cPanel → **Cron Jobs**, ajoutez :
-
-| Champ | Valeur |
-|-------|--------|
-| Minute | `*/30` |
-| Heure | `*` |
-| Jour | `*` |
-| Mois | `*` |
-| Jour sem. | `*` |
-| Commande | `cd /home/YOUR_USERNAME/stafy-workflow && python3 cron_refresh.py >> logs/cron.log 2>&1` |
-
-### Étape 7 – Premier test
-
-```bash
-# Sur le serveur SSH
-cd ~/stafy-workflow
-python3 main.py demo    # Charge des données de démonstration
-```
-
-Puis visitez : `https://VOTRE_DOMAINE/stafy/`
+Dashboard : **https://stafy.votredomaine.com**
 
 ---
 
-## Développement local
+## Déploiement VM – Mode Direct (sans Docker)
 
 ```bash
+# 1. Installer Ollama
+curl -fsSL https://ollama.com/install.sh | sh
+ollama pull qwen2.5:7b
+
+# 2. Installer les dépendances Python
 pip install -r requirements.txt
-cp .env.example .env
-python main.py demo     # Données de démo sans Gmail
-python main.py serve    # Dashboard local → http://localhost:8000
+
+# 3. Configurer
+cp .env.example .env && nano .env
+
+# 4. Vérifier la configuration
+make check
+
+# 5. Tester avec des données de démo
+make demo
+
+# 6. Démarrer
+make serve
 ```
 
-Avec Gmail :
+### Service systemd (démarrage automatique)
+
+```ini
+# /etc/systemd/system/stafy.service
+[Unit]
+Description=Stafy Email Agent
+After=network.target ollama.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/home/ubuntu/stafy-workflow
+ExecStart=/usr/bin/python3 main.py serve
+Restart=always
+RestartSec=10
+EnvironmentFile=/home/ubuntu/stafy-workflow/.env
+
+[Install]
+WantedBy=multi-user.target
+```
+
 ```bash
-python setup_oauth.py   # OAuth (une seule fois)
-python main.py refresh  # Analyser les emails
-python main.py serve    # Dashboard
+systemctl enable --now stafy
 ```
 
 ---
 
-## Architecture du code
+## Configuration `.env`
+
+```env
+# LLM – choisir un provider
+LLM_PROVIDER=ollama          # gratuit, local
+OLLAMA_HOST=http://localhost:11434
+OLLAMA_MODEL=qwen2.5:7b
+
+# Email IMAP (fonctionne avec tout fournisseur)
+IMAP_HOST=mail.votredomaine.com
+IMAP_PORT=993
+IMAP_SSL=true
+IMAP_USERNAME=vous@votredomaine.com
+IMAP_PASSWORD=mot_de_passe
+
+# Dashboard
+DASHBOARD_USERNAME=admin
+DASHBOARD_PASSWORD=mot_de_passe_fort
+SECRET_KEY=cle-aleatoire-longue-32-caracteres-min
+
+# Agent
+REFRESH_INTERVAL_MINUTES=30
+MAX_EMAILS_PER_FETCH=50
+```
+
+---
+
+## Modèles Ollama recommandés
+
+| Modèle | RAM | Qualité | Usage |
+|--------|-----|---------|-------|
+| `qwen2.5:7b` | 6 Go | ★★★★ | **Recommandé** |
+| `llama3.2:8b` | 6 Go | ★★★★ | Alternative |
+| `mistral:7b` | 5 Go | ★★★ | RAM limitée |
+| `qwen2.5:14b` | 12 Go | ★★★★★ | VM puissante |
+
+```bash
+ollama pull qwen2.5:7b   # Changer OLLAMA_MODEL dans .env
+```
+
+---
+
+## Commandes
+
+```bash
+make check      # Vérifier config IMAP + LLM
+make demo       # Données de démo
+make serve      # Serveur local (dev)
+make refresh    # Analyser les emails maintenant
+make up         # Docker Compose
+make logs       # Logs en temps réel
+```
+
+---
+
+## Structure du projet
 
 ```
-src/
-├── agent/          # Agent Claude (tool_use loop)
-│   ├── email_agent.py   # Orchestration principale
-│   ├── tools.py         # Définitions des outils Claude
-│   └── prompts.py       # Prompts système
-├── connectors/
-│   └── gmail.py         # Gmail OAuth2 + API
-├── dashboard/
-│   └── app.py           # FastAPI (développement local)
-├── models/
-│   └── email.py         # Modèles Pydantic
-└── storage/
-    └── database.py      # SQLite (partagé PHP ↔ Python)
-
-public/                  # Dashboard PHP (Hostinger)
-├── index.php            # Dashboard principal
-├── email.php            # Détail d'un email
-├── refresh.php          # Déclencheur de refresh
-├── config.php           # Configuration chemins
-└── includes/            # Composants réutilisables
-
-cron_refresh.py          # Point d'entrée cron Hostinger
+stafy-workflow/
+├── main.py                    # CLI principal (typer)
+├── config.py                  # Configuration (pydantic-settings)
+├── Dockerfile
+├── docker-compose.yml
+├── Makefile
+├── nginx/
+│   └── stafy.conf             # Config Nginx + SSL
+├── src/
+│   ├── llm/
+│   │   ├── base.py            # Interface abstraite LLM
+│   │   ├── factory.py         # Sélection automatique du provider
+│   │   ├── ollama_client.py   # Client Ollama (gratuit, local)
+│   │   └── anthropic_client.py # Client Anthropic (optionnel)
+│   ├── connectors/
+│   │   └── imap.py            # Connecteur IMAP universel
+│   ├── agent/
+│   │   ├── email_agent.py     # Orchestration agent (tool_use loop)
+│   │   ├── tools.py           # Définitions outils Claude/Ollama
+│   │   └── prompts.py         # Prompts système
+│   ├── dashboard/
+│   │   ├── app.py             # FastAPI + scheduler APScheduler
+│   │   ├── auth.py            # Authentification session cookie
+│   │   └── templates/         # Jinja2 (Tailwind CSS)
+│   ├── models/
+│   │   └── email.py           # Modèles Pydantic
+│   └── storage/
+│       └── database.py        # SQLite
+└── legacy/                    # Code archivé (Gmail, cron)
 ```
